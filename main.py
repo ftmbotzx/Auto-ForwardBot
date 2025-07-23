@@ -2,9 +2,10 @@ import os
 import asyncio
 import threading
 from flask import Flask
-from bot import Bot  # assuming your bot.py has Bot class with async .run()
+from pyrogram.idle import idle
+from bot import Bot  # make sure Bot is a subclass of pyrogram.Client
 
-# Fake Flask server to bind port for Render
+# Flask server for keeping the app alive on Render
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
@@ -15,13 +16,25 @@ def run_flask():
     port = int(os.environ.get("PORT", 5000))
     flask_app.run(host="0.0.0.0", port=port)
 
-# Run Flask in a thread
+# Start Flask in a background thread
 threading.Thread(target=run_flask).start()
 
-# Run your async bot on main thread (Render needs this)
-async def main():
-    app = Bot()  # Your bot class instance
-    await app.run()  # This should be an async method
+# Async bot runner
+async def start_bot():
+    app = Bot()  # Your Bot class must subclass pyrogram.Client
+    await app.start()
+    print("🤖 Bot started.")
+    await idle()  # Keeps the bot running
+    await app.stop()
+    print("❌ Bot stopped.")
 
+# Run bot (use current event loop or fallback)
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(start_bot())
+    except RuntimeError as e:
+        # Handle "event loop already running" error (optional fallback)
+        print(f"[!] RuntimeError caught: {e}")
+        loop = asyncio.get_event_loop()
+        loop.create_task(start_bot())
+        loop.run_forever()
